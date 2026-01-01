@@ -70,7 +70,7 @@ func main() {
 			fmt.Printf("- %s: %s\n", k, v)
 		})
 		fmt.Printf("Body:\n")
-		fmt.Printf("%s\n", r.Body)
+		fmt.Printf("%s  \n", r.Body)
 		
 	}
 }
