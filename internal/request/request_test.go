@@ -86,7 +86,7 @@ func TestHeadersParse(t *testing.T) {
 	r, err = RequestFromReader(reader)
 	require.NoError(t, err)
 	require.NotNil(t, r)
-	assert.NotEmpty(t, r.Headers)
+	assert.Equal(t, 0, r.Headers.Len())
 
 	// Test: Malformed Header
 	reader = &chunkReader{

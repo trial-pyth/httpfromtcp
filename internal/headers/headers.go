@@ -54,6 +54,10 @@ func (h *Headers) ForEach(cb func(k, v string)) {
 	}
 }
 
+func (h *Headers) Len() int {
+	return len(h.headers)
+}
+
 func parseHeader(fieldLine []byte) (string, string, error) {
 	parts := bytes.SplitN(fieldLine, []byte(":"), 2)
 	if len(parts) != 2 {
