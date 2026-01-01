@@ -28,14 +28,15 @@ func isValidToken(data []byte) bool {
 	return true
 }
 
-func NewHeaders() *Headers {
-	return &Headers{
+func NewHeaders() Headers {
+	return Headers{
 		headers: map[string]string{},
 	}
 }
 
-func (h *Headers) Get(name string) string {
-	return h.headers[strings.ToLower(name)]
+func (h *Headers) Get(name string) (string, bool) {
+	str, ok := h.headers[strings.ToLower(name)]
+	return str, ok
 }
 
 func (h *Headers) Set(key, value string) {
@@ -47,6 +48,11 @@ func (h *Headers) Set(key, value string) {
 	}
 }
 
+func (h *Headers) ForEach(cb func(k, v string)) {
+	for k, v := range h.headers {
+		cb(k, v)
+	}
+}
 
 func parseHeader(fieldLine []byte) (string, string, error) {
 	parts := bytes.SplitN(fieldLine, []byte(":"), 2)
@@ -89,7 +95,7 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 		}
 
 		read += idx + len(rn)
-		h.Set(name,value)
+		h.Set(name, value)
 	}
 
 	return read, done, nil
