@@ -28,8 +28,8 @@ func isValidToken(data []byte) bool {
 	return true
 }
 
-func NewHeaders() Headers {
-	return Headers{
+func NewHeaders() *Headers {
+	return &Headers{
 		headers: map[string]string{},
 	}
 }

@@ -13,9 +13,10 @@ type parserState string
 
 type Request struct {
 	RequestLine RequestLine
-	Headers     headers.Headers
-	state       parserState
+	Headers     *headers.Headers
 	Body        string
+
+	state parserState
 }
 
 type RequestLine struct {
@@ -56,7 +57,7 @@ func getInt(headers *headers.Headers, name string, defaultValue int) int {
 }
 
 func (r *Request) hasBody() bool {
-	length := getInt(&r.Headers, "content-length", 0)
+	length := getInt(r.Headers, "content-length", 0)
 	return length > 0
 }
 
@@ -94,9 +95,10 @@ outer:
 				return 0, err
 			}
 
-			if n == 0 && !done {
+			if n == 0 {
 				break outer
 			}
+
 			read += n
 			if done {
 				if r.hasBody() {
@@ -109,7 +111,7 @@ outer:
 			}
 
 		case StateBody:
-			length := getInt(&r.Headers, "content-length", 0)
+			length := getInt(r.Headers, "content-length", 0)
 			if length == 0 {
 				panic("chunk not implmented")
 			}
@@ -118,8 +120,23 @@ outer:
 			r.Body += string(currentData[:remaining])
 			read += remaining
 
+			if len(r.Body) > length {
+				return 0, fmt.Errorf("body length %d exceeds content-length %d", len(r.Body), length)
+			}
+
 			if len(r.Body) == length {
 				r.state = StateDone
+				break outer
+			}
+
+			// If we've processed all available data but don't have the full body yet, break to read more
+			if remaining == 0 {
+				break outer
+			}
+
+			// If we've processed all available data but don't have the full body yet, break to read more
+			if remaining == 0 || len(currentData) == 0 {
+				break outer
 			}
 
 		case StateDone:
@@ -174,12 +191,32 @@ func parseRequestLine(b []byte) (*RequestLine, int, error) {
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	request := newRequest()
-	buf := make([]byte, 1024)
+	buf := make([]byte, 4096)
 	bufLen := 0
 	for !request.done() {
 		n, err := reader.Read(buf[bufLen:])
 		if err != nil {
+			if err == io.EOF {
+				// EOF - try to parse what we have
+				if bufLen > 0 {
+					readN, parseErr := request.parse(buf[:bufLen])
+					if parseErr != nil {
+						return nil, parseErr
+					}
+					// If parsing consumed data and request is done, return it
+					if readN > 0 && request.done() {
+						return request, nil
+					}
+				}
+				// EOF and no data or incomplete request - this is a connection that closed without sending
+				return nil, err
+			}
 			return nil, err
+		}
+
+		if n == 0 {
+			// No data read - this shouldn't happen normally, but handle it
+			break
 		}
 
 		bufLen += n
@@ -188,8 +225,11 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			return nil, err
 		}
 
-		copy(buf, buf[readN:bufLen])
-		bufLen -= readN
+		// Shift remaining data to the beginning of the buffer
+		if readN > 0 {
+			copy(buf, buf[readN:bufLen])
+			bufLen -= readN
+		}
 	}
 
 	return request, nil
