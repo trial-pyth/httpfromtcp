@@ -42,11 +42,12 @@ func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 outer:
 	for {
+		currentData := data[read:]
 		switch r.state {
 		case StateError:
 			return 0, ErrorRequestInErrorState
 		case StateInit:
-			rl, n, err := parseRequestLine(data[read:])
+			rl, n, err := parseRequestLine(currentData)
 			if err != nil {
 				r.state = StateError
 				return 0, err
@@ -60,11 +61,12 @@ outer:
 
 			r.state = StateHeaders
 		case StateHeaders:
-			n, done, err := r.Headers.Parse(data[read:])
-			if err != nil {
+			n, done, err := r.Headers.Parse(currentData)
+			if err != nil { 
 				r.state = StateError
 				return 0, err
 			}
+			
 			if n == 0 && !done {
 				break outer
 			}
@@ -76,6 +78,8 @@ outer:
 
 		case StateDone:
 			break outer
+		default:
+			panic("somehow we have programmed poorly")
 		}
 	}
 
