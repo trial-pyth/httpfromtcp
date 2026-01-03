@@ -72,6 +72,7 @@ func main() {
 		}
 
 		h.Replace("Content-Length", fmt.Sprintf("%d", len(body)))
+		h.Replace("Content-Type", "text/plain")
 		w.WriteStatusLine(status)
 		w.WriteHeaders(*h)
 		w.WriteBody(body)
