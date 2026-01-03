@@ -1,10 +1,14 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/trial-pyth/httpfromtcp/internal/request"
@@ -13,6 +17,14 @@ import (
 )
 
 const port = 42069
+
+func toStr(bytes []byte) string {
+	out := ""
+	for _, b := range bytes {
+		out += fmt.Sprintf("%02x", b)
+	}
+	return out
+}
 
 func respond400() []byte {
 	return []byte(`
@@ -69,6 +81,60 @@ func main() {
 		} else if req.RequestLine.RequestTarget == "/myproblem" {
 			body = respond500()
 			status = response.StatusInternalServerError
+		} else if req.RequestLine.RequestTarget == "/video" {
+			f, _ := os.ReadFile("assets/vim.mp4")
+			h.Replace("Content-Type", "video/mp4")
+			h.Replace("Content-Length", fmt.Sprintf("%d", len(f)))
+			w.WriteStatusLine(response.StatusOK)
+			w.WriteHeaders(*h)
+			w.WriteBody(f)
+		} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
+
+			target := req.RequestLine.RequestTarget
+			res, err := http.Get("https://httpbin.org/" + target[len("/httpbin/"):])
+			if err != nil {
+				body = respond500()
+				status = response.StatusInternalServerError
+			} else {
+				defer res.Body.Close()
+				w.WriteStatusLine(response.StatusOK)
+				h.Delete("Content-Length")
+				h.Set("Transfer-Encoding", "chunked")
+				h.Set("Trailer", "X-Content-Sha256")
+				h.Set("Trailer", "X-Content-Length")
+				h.Replace("Content-Type", "text/plain")
+				w.WriteHeaders(*h)
+
+				// Write chunked data from httpbin response
+				fullBody := []byte{}
+
+				for {
+					data := make([]byte, 32)
+					n, err := res.Body.Read(data)
+					if err != nil {
+						if err == io.EOF {
+							break
+						}
+						break
+					}
+					if n == 0 {
+						break
+					}
+
+					fullBody = append(fullBody, data[:n]...)
+					// Write chunk: <length in hex>\r\n<data>\r\n
+					w.WriteBody([]byte(fmt.Sprintf("%x\r\n", n)))
+					w.WriteBody(data[:n])
+					w.WriteBody([]byte("\r\n"))
+				}
+				// Write final chunk marker: 0\r\n
+				w.WriteBody([]byte("0\r\n"))
+				// Write trailers (must come after 0\r\n but before final \r\n)
+				out := sha256.Sum256(fullBody)
+				w.WriteBody([]byte(fmt.Sprintf("X-Content-Sha256: %s\r\nX-Content-Length: %d\r\n\r\n", toStr(out[:]), len(fullBody))))
+				return
+			}
+
 		}
 
 		h.Replace("Content-Length", fmt.Sprintf("%d", len(body)))

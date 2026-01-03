@@ -55,6 +55,9 @@ func (w *Writer) WriteBody(body []byte) (int, error) {
 	return n, err
 }
 
+// func (w *Writer) WriteChunkedBody(p []byte) (int, error)
+
+
 type Response struct {
 }
 
