@@ -39,6 +39,11 @@ func (h *Headers) Get(name string) (string, bool) {
 	return str, ok
 }
 
+func (h *Headers) Replace(key, value string) {
+	key = strings.ToLower(key)
+	h.headers[key] = value
+}
+
 func (h *Headers) Set(key, value string) {
 	key = strings.ToLower(key)
 	if existingValue, ok := h.headers[key]; ok {
@@ -74,7 +79,7 @@ func parseHeader(fieldLine []byte) (string, string, error) {
 	return string(name), string(value), nil
 }
 
-func (h Headers) Parse(data []byte) (int, bool, error) {
+func (h *Headers) Parse(data []byte) (int, bool, error) {
 	read := 0
 	done := false
 	for {
